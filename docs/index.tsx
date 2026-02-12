@@ -2,7 +2,7 @@
 
 import { CustomTextInput } from "@/constants/Customtextinput";
 import { DropdownList } from "@/constants/DropdownList";
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -142,7 +142,7 @@ export default function Index() {
       >
         <View style={styles.appContainer}>
 
-          <Text style={styles.title}>Focus Softnet ERP</Text>
+          <Text style={styles.title}>Form with Keyboard-Aware Dropdowns</Text>
 
           {/* ===================== TEXT INPUTS ===================== */}
           <Text style={styles.sectionHeader}>Server Connection</Text>
@@ -152,9 +152,6 @@ export default function Index() {
               label="Hostname"
               placeholder="Enter your hostname"
               value={hostname}
-              inputBackgroundColor="#f0f8ff"
-              inputBorderColor="#1976D2"
-              focusedBorderColor="#00458eff"
               onChangeText={setHostname}
               leftIcon={<Ionicons name="server" size={22} color="#555" />}
             />
@@ -165,10 +162,6 @@ export default function Index() {
               label="Username"
               placeholder="Enter your username"
               value={username}
-              inputBackgroundColor="#f0f8ff"
-              inputBorderColor="#1976D2"
-              focusedBorderColor="#00458eff"
-              inputBorderWidth={1}
               onChangeText={setUsername}
               leftIcon={<Ionicons name="person" size={22} color="#555" />}
             />
@@ -179,15 +172,37 @@ export default function Index() {
               label="Password"
               placeholder="Enter your password"
               value={password}
-              inputBackgroundColor="#f0f8ff"
-              inputBorderColor="#1976D2"
-              focusedBorderColor="#00458eff"
               onChangeText={setPassword}
               leftIcon={<Ionicons name="lock-closed" size={22} color="#555" />}
               secureTextEntry
               showPasswordToggle
             />
           </View>
+
+          {/* ===================== DROPDOWNS WITH ICONS ===================== */}
+          <Text style={styles.sectionHeader}>Dropdowns with Left Icons</Text>
+
+          {/* Dropdown 1: With Custom Icon */}
+          <View style={styles.section}>
+            <DropdownList
+              label="Select Fruit"
+              data={fruits}
+              placeholder="Choose a fruit"
+              leftIcon={<MaterialIcons name="apple" size={22} color="#ff6b6b" />}
+              headerBackgroundColor="#fff5f5"
+              headerBorderColor="#ff6b6b"
+              headerBorderWidth={1}
+              itemSelectedBackgroundColor="#ffe0e0"
+              itemSelectedTextColor="#d63031"
+              checkIconColor="#d63031"
+              onSelectionChange={(selected) => {
+                setSelectedFruit(selected as Item);
+                console.log('Selected fruit:', selected);
+              }}
+            />
+          </View>
+
+          {/* Dropdown 2: With Different Icon */}
           <View style={styles.section}>
             <DropdownList
               label="Select Company"
@@ -207,30 +222,64 @@ export default function Index() {
             />
           </View>
 
-          {/* <View style={styles.section}>
+          {/* ===================== DROPDOWN WITHOUT ICON ===================== */}
+          <Text style={styles.sectionHeader}>Dropdown without Icon</Text>
+
+          <View style={styles.section}>
             <DropdownList
-              label="Select Fruit"
+              label="Standard Dropdown"
               data={fruits}
-              placeholder="Choose a fruit"
-              leftIcon={<MaterialIcons name="apple" size={22} color="#ff6b6b" />}
-              headerBackgroundColor="#fff5f5"
-              headerBorderColor="#ff6b6b"
-              headerBorderWidth={1}
-              itemSelectedBackgroundColor="#ffe0e0"
-              itemSelectedTextColor="#d63031"
-              checkIconColor="#d63031"
+              placeholder="Select an option"
               onSelectionChange={(selected) => {
-                setSelectedFruit(selected as Item);
-                console.log('Selected fruit:', selected);
+                console.log('Standard dropdown:', selected);
               }}
             />
-          </View> */}
+          </View>
 
+          {/* ===================== MULTI-SELECT DROPDOWN ===================== */}
+          <Text style={styles.sectionHeader}>Multi-Select with Icon</Text>
 
+          <View style={styles.section}>
+            <DropdownList
+              label="Select Multiple Fruits"
+              data={fruits}
+              placeholder="Choose fruits"
+              multiSelect
+              leftIcon={<MaterialIcons name="checklist" size={22} color="#4caf50" />}
+              headerBackgroundColor="#f1f8e9"
+              headerBorderColor="#4caf50"
+              headerBorderWidth={1}
+              itemSelectedBackgroundColor="#c8e6c9"
+              itemSelectedTextColor="#2e7d32"
+              checkIconColor="#2e7d32"
+              onSelectionChange={(selected) => {
+                console.log('Selected multiple:', selected);
+              }}
+            />
+          </View>
 
+          {/* Info Section */}
+          <View style={styles.infoBox}>
+            <Text style={styles.infoTitle}>✨ Features Demonstrated:</Text>
+            <Text style={styles.infoText}>• Keyboard-aware dropdowns (works on iOS & Android)</Text>
+            <Text style={styles.infoText}>• Dropdown automatically repositions above keyboard</Text>
+            <Text style={styles.infoText}>• Left icon support (like CustomTextInput)</Text>
+            <Text style={styles.infoText}>• Searchable dropdown with smooth scrolling</Text>
+            <Text style={styles.infoText}>• Multi-select and single-select modes</Text>
+          </View>
 
-
-
+          {/* Selected Values Display */}
+          {(selectedFruit || selectedCompany) && (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Selected Values:</Text>
+              {selectedFruit && (
+                <Text style={styles.resultText}>🍎 Fruit: {selectedFruit.name}</Text>
+              )}
+              {selectedCompany && (
+                <Text style={styles.resultText}>🏢 Company: {selectedCompany.name}</Text>
+              )}
+            </View>
+          )}
 
         </View>
       </ScrollView>
