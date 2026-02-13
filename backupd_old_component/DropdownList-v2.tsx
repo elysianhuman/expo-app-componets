@@ -21,15 +21,14 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 /**
  * Props for the DropdownList component
- * Now works with ANY data structure!
+ * All styling and behavior can be customized through these props
  */
-interface DropdownListProps<T = any> {
+interface DropdownListProps {
   // Data and selection
-  data: T[];
-  renderItem: (item: T) => string; // NEW: How to display each item in the list
-  getItemId: (item: T) => string | number; // NEW: How to get unique ID from item
+  data: Item[];
+  titleKey?: keyof Item;
   multiSelect?: boolean;
-  onSelectionChange: (selectedItems: T | T[] | null) => void;
+  onSelectionChange: (selectedItems: Item | Item[] | null) => void;
 
   // Label customization
   label?: string;
@@ -44,7 +43,6 @@ interface DropdownListProps<T = any> {
   searchable?: boolean;
   searchPlaceholder?: string;
   searchAutoFocus?: boolean;
-  searchFilter?: (item: T, query: string) => boolean; // NEW: Custom search logic
 
   // Dropdown appearance
   dropdownMaxHeight?: number;
@@ -74,7 +72,7 @@ interface DropdownListProps<T = any> {
   itemFontSize?: number;
 
   // Icons
-  leftIcon?: ReactNode;
+  leftIcon?: ReactNode; // NEW: Left icon support (like CustomTextInput)
   chevronColor?: string;
   chevronSize?: number;
   checkIconColor?: string;
@@ -91,7 +89,26 @@ interface DropdownListProps<T = any> {
   // Advanced options
   disabled?: boolean;
   animationType?: 'none' | 'fade' | 'slide';
-  closeOnSelect?: boolean;
+  closeOnSelect?: boolean; // Only for single select
+}
+
+
+/* ===================== TYPES ===================== */
+
+/**
+ * Generic item structure - can be extended based on your data needs
+ */
+interface Item {
+  id: string | number;
+  name: string;
+  category: string;
+  color: string;
+  price: number;
+  unit: string;
+  origin: string;
+  stock: number;
+  rating: number;
+  description: string;
 }
 
 
@@ -99,15 +116,13 @@ interface DropdownListProps<T = any> {
 
 /**
  * A flexible, customizable dropdown component for React Native
- * Works with ANY data structure - you define how to render and identify items
  * Supports both single and multi-select modes with search functionality
  * Automatically handles keyboard to keep dropdown visible on both iOS and Android
  */
-export const DropdownList = <T,>({
+export const DropdownList: React.FC<DropdownListProps> = ({
   // Data and selection
   data,
-  renderItem,
-  getItemId,
+  titleKey = 'name',
   multiSelect = false,
   onSelectionChange,
 
@@ -124,7 +139,6 @@ export const DropdownList = <T,>({
   searchable = true,
   searchPlaceholder = 'Search...',
   searchAutoFocus = true,
-  searchFilter,
 
   // Dropdown appearance
   dropdownMaxHeight = SCREEN_HEIGHT * 0.45,
@@ -154,7 +168,7 @@ export const DropdownList = <T,>({
   itemFontSize = 16,
 
   // Icons
-  leftIcon,
+  leftIcon, // NEW: Left icon
   chevronColor = '#555',
   chevronSize = 22,
   checkIconColor = '#1976D2',
@@ -171,16 +185,16 @@ export const DropdownList = <T,>({
   // Advanced
   disabled = false,
   animationType = 'fade',
-  closeOnSelect = true,
-}: DropdownListProps<T>) => {
+  closeOnSelect = true, // Only applies to single select
+}) => {
   // Ref to measure the header position for floating dropdown
   const headerRef = useRef<View>(null);
 
   // State management
   const [showList, setShowList] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<T[]>([]);
+  const [selectedItems, setSelectedItems] = useState<Item[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 0 });
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Keyboard event listeners
@@ -205,20 +219,24 @@ export const DropdownList = <T,>({
     };
   }, []);
 
+  // Log selected items when they change (can be removed in production)
+  useEffect(() => {
+    console.log('Selected Items:', selectedItems);
+  }, [selectedItems]);
+
   /**
    * Filter data based on search query
-   * Uses custom searchFilter if provided, otherwise searches in rendered text
+   * Searches in the field specified by titleKey
    */
   const filteredData = data.filter((item) => {
-    if (!searchQuery) return true;
-
-    if (searchFilter) {
-      return searchFilter(item, searchQuery);
+    const itemValue = item[titleKey];
+    if (itemValue === null || itemValue === undefined) {
+      return false;
     }
-
-    // Default: search in the rendered text
-    const renderedText = renderItem(item);
-    return renderedText.toLowerCase().includes(searchQuery.toLowerCase());
+    return itemValue
+      .toString()
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
   });
 
   /**
@@ -227,24 +245,27 @@ export const DropdownList = <T,>({
   const calculateDropdownPosition = (x: number, y: number, width: number, height: number) => {
     const availableSpaceBelow = SCREEN_HEIGHT - y - height - keyboardHeight;
     const availableSpaceAbove = y;
-    const estimatedDropdownHeight = Math.min(
-      dropdownMaxHeight,
-      filteredData.length * (itemPadding * 2 + itemFontSize) + (searchable ? 56 : 0)
-    );
+    const dropdownHeight = Math.min(dropdownMaxHeight, filteredData.length * (itemPadding * 2 + itemFontSize) + (searchable ? 56 : 0));
 
-    const fitsBelow = availableSpaceBelow >= estimatedDropdownHeight;
-    const fitsAbove = availableSpaceAbove >= estimatedDropdownHeight;
+    // Check if dropdown fits below the header
+    const fitsBelow = availableSpaceBelow >= dropdownHeight;
+
+    // Check if dropdown fits above the header
+    const fitsAbove = availableSpaceAbove >= dropdownHeight;
 
     let calculatedTop: number;
     let calculatedMaxHeight: number;
 
     if (fitsBelow) {
+      // Position below header
       calculatedTop = y + height + 6;
       calculatedMaxHeight = Math.min(dropdownMaxHeight, availableSpaceBelow - 10);
     } else if (fitsAbove) {
-      calculatedTop = y - estimatedDropdownHeight - 6;
+      // Position above header
+      calculatedTop = y - dropdownHeight - 6;
       calculatedMaxHeight = Math.min(dropdownMaxHeight, availableSpaceAbove - 10);
     } else {
+      // Not enough space either way - use available space below and make scrollable
       if (availableSpaceBelow > availableSpaceAbove) {
         calculatedTop = y + height + 6;
         calculatedMaxHeight = availableSpaceBelow - 10;
@@ -264,11 +285,15 @@ export const DropdownList = <T,>({
 
   /**
    * Toggle dropdown visibility
+   * Measures header position to properly position the floating dropdown
    */
   const toggleList = () => {
-    if (disabled) return;
+    if (disabled) {
+      return;
+    }
 
     if (!showList) {
+      // Measure header position before opening
       headerRef.current?.measureInWindow((x, y, width, height) => {
         const calculatedPosition = calculateDropdownPosition(x, y, width, height);
         setPosition(calculatedPosition);
@@ -290,26 +315,30 @@ export const DropdownList = <T,>({
         setPosition(calculatedPosition);
       });
     }
-  }, [keyboardHeight, filteredData.length]);
+  }, [keyboardHeight]);
 
   /**
    * Handle item selection
+   * For single select: replaces selection and closes dropdown
+   * For multi select: toggles item in selection array
    */
-  const handleSelect = (item: T) => {
+  const handleSelect = (item: Item) => {
     if (!multiSelect) {
+      // Single select mode
       setSelectedItems([item]);
       setSearchQuery('');
 
+      // Close dropdown if closeOnSelect is enabled
       if (closeOnSelect) {
         setShowList(false);
       }
 
       onSelectionChange(item);
     } else {
-      const itemId = getItemId(item);
-      const isSelected = selectedItems.some((i) => getItemId(i) === itemId);
+      // Multi select mode
+      const isSelected = selectedItems.some((i) => i.id === item.id);
       const newSelected = isSelected
-        ? selectedItems.filter((i) => getItemId(i) !== itemId)
+        ? selectedItems.filter((i) => i.id !== item.id)
         : [...selectedItems, item];
 
       setSelectedItems(newSelected);
@@ -319,6 +348,7 @@ export const DropdownList = <T,>({
 
   /**
    * Render the selected items display in the header
+   * Shows placeholder if nothing is selected
    */
   const renderSelectedDisplay = () => {
     if (selectedItems.length === 0) {
@@ -330,6 +360,7 @@ export const DropdownList = <T,>({
     }
 
     if (!multiSelect) {
+      // Single select: show only the selected item
       return (
         <Text
           style={[
@@ -341,11 +372,12 @@ export const DropdownList = <T,>({
             },
           ]}
         >
-          {renderItem(selectedItems[0])}
+          {selectedItems[0][titleKey]}
         </Text>
       );
     }
 
+    // Multi select: show comma-separated list
     return (
       <Text
         style={[
@@ -358,17 +390,17 @@ export const DropdownList = <T,>({
         ]}
         numberOfLines={1}
       >
-        {selectedItems.map((i) => renderItem(i)).join(', ')}
+        {selectedItems.map((i) => i[titleKey]).join(', ')}
       </Text>
     );
   };
 
   /**
    * Render individual list item
+   * Shows checkmark for selected items in multi-select mode
    */
-  const renderListItem = ({ item }: { item: T }) => {
-    const itemId = getItemId(item);
-    const isSelected = selectedItems.some((i) => getItemId(i) === itemId);
+  const renderItem = ({ item }: { item: Item }) => {
+    const isSelected = selectedItems.some((i) => i.id === item.id);
 
     return (
       <TouchableOpacity
@@ -393,7 +425,7 @@ export const DropdownList = <T,>({
             },
           ]}
         >
-          {renderItem(item)}
+          {item[titleKey]}
         </Text>
 
         {multiSelect && isSelected && (
@@ -405,13 +437,23 @@ export const DropdownList = <T,>({
 
   return (
     <View style={styles.container}>
+      {/* Header Wrapper */}
       <View style={styles.headerWrapper}>
+        {/* Label positioned above the dropdown */}
         {label && showLabel && (
-          <View style={[styles.labelContainer, labelStyle]}>
-            <Text style={styles.labelText}>{label}</Text>
+          <View
+            style={[
+              styles.labelContainer,
+              labelStyle,
+            ]}
+          >
+            <Text style={styles.labelText}>
+              {label}
+            </Text>
           </View>
         )}
 
+        {/* Dropdown Header (clickable area) */}
         <TouchableOpacity
           ref={headerRef}
           style={[
@@ -429,10 +471,18 @@ export const DropdownList = <T,>({
           activeOpacity={0.8}
           disabled={disabled}
         >
-          {leftIcon && <View style={styles.leftIconContainer}>{leftIcon}</View>}
+          {/* Left Icon */}
+          {leftIcon && (
+            <View style={styles.leftIconContainer}>
+              {leftIcon}
+            </View>
+          )}
 
-          <View style={styles.selectedContainer}>{renderSelectedDisplay()}</View>
+          <View style={styles.selectedContainer}>
+            {renderSelectedDisplay()}
+          </View>
 
+          {/* Chevron icon (up/down arrow) */}
           <Ionicons
             name={showList ? 'chevron-up' : 'chevron-down'}
             size={chevronSize}
@@ -441,6 +491,7 @@ export const DropdownList = <T,>({
         </TouchableOpacity>
       </View>
 
+      {/* Floating Dropdown Modal */}
       <Modal
         visible={showList}
         transparent
@@ -454,6 +505,7 @@ export const DropdownList = <T,>({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalContainer}
         >
+          {/* Backdrop - clicking closes the dropdown */}
           <Pressable
             style={[
               styles.backdrop,
@@ -468,6 +520,7 @@ export const DropdownList = <T,>({
             }}
           />
 
+          {/* Dropdown content container */}
           <View
             style={[
               styles.floatingDropdown,
@@ -483,6 +536,7 @@ export const DropdownList = <T,>({
               },
             ]}
           >
+            {/* Search Input */}
             {searchable && (
               <View style={styles.searchContainer}>
                 <Ionicons name="search" size={20} color="#777" />
@@ -501,14 +555,16 @@ export const DropdownList = <T,>({
               </View>
             )}
 
+            {/* List of items */}
             <FlatList
               data={filteredData}
-              renderItem={renderListItem}
-              keyExtractor={(item) => getItemId(item).toString()}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id.toString()}
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
             />
 
+            {/* Empty state when no results found */}
             {filteredData.length === 0 && (
               <View style={styles.noResults}>
                 <Text style={[styles.noResultsText, { color: emptyMessageColor }]}>
@@ -525,15 +581,22 @@ export const DropdownList = <T,>({
 
 
 const styles = StyleSheet.create({
+  // Modal container
   modalContainer: {
     flex: 1,
   },
+
+  // Main container for each dropdown instance
   container: {
     marginBottom: 30,
   },
+
+  // Header wrapper (contains label and dropdown header)
   headerWrapper: {
     position: 'relative',
   },
+
+  // Label styling (floating above the dropdown)
   labelContainer: {
     position: 'absolute',
     top: -10,
@@ -551,27 +614,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
   },
+
+  // Dropdown header (clickable button area)
   dropdownHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
+
+  // Left icon container
   leftIconContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // Container for selected items display
   selectedContainer: {
     flex: 1,
   },
+
+  // Placeholder text when nothing is selected
   placeholder: {
     fontSize: 16,
   },
+
+  // Selected items text
   selectedText: {
     fontSize: 16,
   },
+
+  // Backdrop overlay
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
+
+  // Floating dropdown container
   floatingDropdown: {
     position: 'absolute',
     shadowColor: '#000',
@@ -581,6 +658,8 @@ const styles = StyleSheet.create({
     elevation: 10,
     overflow: 'hidden',
   },
+
+  // Search input container
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -590,23 +669,33 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
     gap: 10,
   },
+
+  // Search text input
   searchInput: {
     flex: 1,
     fontSize: 17,
     height: 44,
   },
+
+  // Individual list item
   listItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+
+  // List item text
   itemText: {
     fontSize: 16,
   },
+
+  // Empty state container
   noResults: {
     padding: 30,
     alignItems: 'center',
   },
+
+  // Empty state text
   noResultsText: {
     fontSize: 15,
   },

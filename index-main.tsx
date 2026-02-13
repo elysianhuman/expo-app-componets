@@ -1,7 +1,7 @@
 import BackgroundImage from '@/assets/focuserp/background.png';
 import FallbackImage from '@/assets/focuserp/focushd.png';
-import InputText from '@/constants/InputText';
-import SelectModal from '@/constants/selectModal';
+import InputText from '@/backupd_old_component/InputText';
+import SelectModal from '@/backupd_old_component/selectModal';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
