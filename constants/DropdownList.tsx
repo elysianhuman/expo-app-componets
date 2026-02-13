@@ -26,8 +26,8 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface DropdownListProps<T = any> {
   // Data and selection
   data: T[];
-  renderItem: (item: T) => string; // NEW: How to display each item in the list
-  getItemId: (item: T) => string | number; // NEW: How to get unique ID from item
+  renderItem: (item: T) => string;
+  getItemId: (item: T) => string | number;
   multiSelect?: boolean;
   onSelectionChange: (selectedItems: T | T[] | null) => void;
 
@@ -44,7 +44,7 @@ interface DropdownListProps<T = any> {
   searchable?: boolean;
   searchPlaceholder?: string;
   searchAutoFocus?: boolean;
-  searchFilter?: (item: T, query: string) => boolean; // NEW: Custom search logic
+  searchFilter?: (item: T, query: string) => boolean;
 
   // Dropdown appearance
   dropdownMaxHeight?: number;
@@ -207,7 +207,6 @@ export const DropdownList = <T,>({
 
   /**
    * Filter data based on search query
-   * Uses custom searchFilter if provided, otherwise searches in rendered text
    */
   const filteredData = data.filter((item) => {
     if (!searchQuery) return true;
@@ -216,7 +215,6 @@ export const DropdownList = <T,>({
       return searchFilter(item, searchQuery);
     }
 
-    // Default: search in the rendered text
     const renderedText = renderItem(item);
     return renderedText.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -225,34 +223,65 @@ export const DropdownList = <T,>({
    * Calculate optimal dropdown position considering keyboard
    */
   const calculateDropdownPosition = (x: number, y: number, width: number, height: number) => {
-    const availableSpaceBelow = SCREEN_HEIGHT - y - height - keyboardHeight;
+    // Calculate available space
+    const screenBottom = SCREEN_HEIGHT - keyboardHeight;
+    const availableSpaceBelow = screenBottom - y - height;
     const availableSpaceAbove = y;
+
+    // Estimate dropdown height
+    const searchBarHeight = searchable ? 56 : 0;
+    const emptyStateHeight = 86; // Height for "No results found" message
+
+    // If no data, use minimum height including empty state
+    const estimatedItemsHeight = filteredData.length > 0
+      ? filteredData.length * (itemPadding * 2 + itemFontSize + 1)
+      : emptyStateHeight;
+
     const estimatedDropdownHeight = Math.min(
       dropdownMaxHeight,
-      filteredData.length * (itemPadding * 2 + itemFontSize) + (searchable ? 56 : 0)
+      estimatedItemsHeight + searchBarHeight + 20
     );
-
-    const fitsBelow = availableSpaceBelow >= estimatedDropdownHeight;
-    const fitsAbove = availableSpaceAbove >= estimatedDropdownHeight;
 
     let calculatedTop: number;
     let calculatedMaxHeight: number;
 
-    if (fitsBelow) {
+    // Minimum height that ensures empty state is visible
+    const minHeightForEmptyState = searchBarHeight + emptyStateHeight + 20;
+    const minDisplayHeight = filteredData.length > 0 ? 200 : minHeightForEmptyState;
+
+    // Priority 1: Try to fit below if there's reasonable space
+    if (availableSpaceBelow >= Math.min(minDisplayHeight, estimatedDropdownHeight)) {
       calculatedTop = y + height + 6;
-      calculatedMaxHeight = Math.min(dropdownMaxHeight, availableSpaceBelow - 10);
-    } else if (fitsAbove) {
-      calculatedTop = y - estimatedDropdownHeight - 6;
-      calculatedMaxHeight = Math.min(dropdownMaxHeight, availableSpaceAbove - 10);
-    } else {
-      if (availableSpaceBelow > availableSpaceAbove) {
+      calculatedMaxHeight = Math.min(
+        dropdownMaxHeight,
+        Math.max(minDisplayHeight, availableSpaceBelow - 10)
+      );
+    }
+    // Priority 2: Try to fit above if there's reasonable space
+    else if (availableSpaceAbove >= Math.min(minDisplayHeight, estimatedDropdownHeight)) {
+      const heightToUse = Math.min(
+        estimatedDropdownHeight,
+        Math.max(minDisplayHeight, availableSpaceAbove - 10)
+      );
+      calculatedTop = y - heightToUse - 6;
+      calculatedMaxHeight = heightToUse;
+    }
+    // Priority 3: Use the larger available space
+    else {
+      if (availableSpaceBelow >= availableSpaceAbove) {
         calculatedTop = y + height + 6;
-        calculatedMaxHeight = availableSpaceBelow - 10;
+        calculatedMaxHeight = Math.max(minDisplayHeight, availableSpaceBelow - 10);
       } else {
-        calculatedTop = 10;
-        calculatedMaxHeight = y - 20;
+        calculatedMaxHeight = Math.max(minDisplayHeight, availableSpaceAbove - 10);
+        calculatedTop = y - calculatedMaxHeight - 6;
       }
     }
+
+    // Ensure dropdown doesn't go off-screen
+    calculatedTop = Math.max(10, Math.min(calculatedTop, screenBottom - minDisplayHeight));
+
+    // Ensure minimum and maximum heights
+    calculatedMaxHeight = Math.max(minDisplayHeight, Math.min(calculatedMaxHeight, dropdownMaxHeight));
 
     return {
       top: calculatedTop,
@@ -281,16 +310,20 @@ export const DropdownList = <T,>({
   };
 
   /**
-   * Recalculate position when keyboard height changes
+   * Recalculate position when keyboard height changes or filtered data changes
    */
   useEffect(() => {
-    if (showList) {
-      headerRef.current?.measureInWindow((x, y, width, height) => {
-        const calculatedPosition = calculateDropdownPosition(x, y, width, height);
-        setPosition(calculatedPosition);
-      });
+    if (showList && headerRef.current) {
+      const timer = setTimeout(() => {
+        headerRef.current?.measureInWindow((x, y, width, height) => {
+          const calculatedPosition = calculateDropdownPosition(x, y, width, height);
+          setPosition(calculatedPosition);
+        });
+      }, 100);
+
+      return () => clearTimeout(timer);
     }
-  }, [keyboardHeight, filteredData.length]);
+  }, [keyboardHeight, filteredData.length, showList]);
 
   /**
    * Handle item selection
@@ -445,14 +478,16 @@ export const DropdownList = <T,>({
         visible={showList}
         transparent
         animationType={animationType}
+        statusBarTranslucent
         onRequestClose={() => {
           setShowList(false);
           setSearchQuery('');
         }}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalContainer}
+          keyboardVerticalOffset={0}
         >
           <Pressable
             style={[
@@ -507,15 +542,19 @@ export const DropdownList = <T,>({
               keyExtractor={(item) => getItemId(item).toString()}
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
+              showsVerticalScrollIndicator={true}
+              style={{ flexGrow: 1 }}
+              contentContainerStyle={{
+                flexGrow: 1,
+              }}
+              ListEmptyComponent={
+                <View style={styles.noResults}>
+                  <Text style={[styles.noResultsText, { color: emptyMessageColor }]}>
+                    {emptyMessage}
+                  </Text>
+                </View>
+              }
             />
-
-            {filteredData.length === 0 && (
-              <View style={styles.noResults}>
-                <Text style={[styles.noResultsText, { color: emptyMessageColor }]}>
-                  {emptyMessage}
-                </Text>
-              </View>
-            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -606,8 +645,12 @@ const styles = StyleSheet.create({
   noResults: {
     padding: 30,
     alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    minHeight: 86,
   },
   noResultsText: {
     fontSize: 15,
+    textAlign: 'center',
   },
 });
